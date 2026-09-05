@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1F6F54">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Calcolatore TWR</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<meta name="apple-mobile-web-app-title" content="TWR">
+
+<style>
+  :root {
+    --bg: #EFF2F1; --card: #FFFFFF; --ink: #101D27; --muted: #5C6B66;
+    --faint: #8A968F; --ghost: #B8C0BC; --line: #D8DEDB; --hairline: #EDF0EF;
+    --green: #1F6F54; --red: #B3402A; --amber: #C8930A;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-size: 15px; line-height: 1.45;
+    padding: 16px 12px calc(24px + env(safe-area-inset-bottom));
+  }
+  .num { font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  header { border-bottom: 1px solid #C9D1CE; padding-bottom: 14px; margin-bottom: 18px; }
+  .eyebrow { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--muted); margin-bottom: 3px; }
+  h1 { font-size: 21px; font-weight: 600; }
+  header p { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+  @media (min-width: 640px) { .metrics { grid-template-columns: repeat(4, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .metric .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--faint); margin-bottom: 2px; }
+  .metric .val { font-size: 20px; font-weight: 600; }
+  .metric .hint { font-size: 10.5px; color: var(--ghost); margin-top: 1px; }
+  .pos { color: var(--green); } .neg { color: var(--red); } .none { color: var(--ghost); }
+  /* tab */
+  .tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 4px; padding: 8px 0 10px;
+    margin-bottom: 4px; background: var(--bg); border-bottom: 1px solid #D5DCD9; }
+  .tab { flex: 1; padding: 9px 6px; font-size: 13.5px; font-weight: 500; color: var(--muted);
+    background: #E4E9E7; border: none; border-radius: 8px; cursor: pointer; }
+  .tab.on { background: var(--green); color: #fff; }
+  .tab:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+  .tabpane[hidden] { display: none; }
+  /* sfondo tenue metriche per stato */
+  .metric.m-good { background: #E9F3ED; border-color: #C3DCCD; }
+  .metric.m-good .val { color: #1B6B50; }
+  .metric.m-warn { background: #FBF4E3; border-color: #EAD9AE; }
+  .metric.m-warn .val { color: #9A6F12; }
+  .metric.m-bad  { background: #F7E7E2; border-color: #E6C3B7; }
+  .metric.m-bad .val  { color: #B3402A; }
+  .metric.m-neutral .val { color: var(--ink); }
+  .reg-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .regsel { font-size: 13px; padding: 7px 8px; border: 1px solid #C9D1CE; border-radius: 7px; background: #FBFCFB; color: var(--ink); font-family: inherit; }
+  .regsel:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+  .reg-count { font-size: 11.5px; color: var(--faint); }
+  section.card { margin-bottom: 14px; }
+  h2 { font-size: 13.5px; font-weight: 600; margin-bottom: 10px; }
+  .legend { font-size: 11px; color: var(--muted); display: flex; gap: 14px; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .sw { display: inline-block; width: 16px; height: 2px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  svg { width: 100%; height: auto; display: block; }
+  form .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (min-width: 640px) { form .grid { grid-template-columns: repeat(4, 1fr); } }
+  label { display: block; }
+  label .l { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  label .l small { color: var(--ghost); font-size: 10.5px; }
+  input {
+    width: 100%; border: 1px solid #C9D1CE; background: #FBFCFB; border-radius: 7px;
+    padding: 9px 8px; font-size: 15px; color: var(--ink); font-family: inherit;
+  }
+  input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+  .seg { display: flex; gap: 0; border: 1px solid #C9D1CE; border-radius: 7px; overflow: hidden; }
+  .seg button { flex: 1; padding: 9px 4px; font-size: 13px; font-weight: 500; border-radius: 0; background: #FBFCFB; color: var(--muted); border-right: 1px solid #C9D1CE; }
+  .seg button:last-child { border-right: none; }
+  .seg button:focus { outline-offset: -2px; }
+  .seg button.on-none { background: #EEF1F0; color: var(--ink); }
+  .seg button.on-in { background: var(--green); color: #fff; }
+  .seg button.on-out { background: var(--red); color: #fff; }
+  .err { color: var(--red); font-size: 13px; margin-top: 8px; }
+  .tot-live { margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .tot-live b { color: var(--ink); font-weight: 600; }
+  .btns { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  button {
+    border: none; border-radius: 7px; padding: 9px 16px; font-size: 14px; font-weight: 500;
+    cursor: pointer; font-family: inherit; background: transparent; color: var(--ink);
+  }
+  button:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+  .primary { background: var(--green); color: #fff; }
+  .ghost-btn { border: 1px solid #C9D1CE; }
+  .link { padding: 4px 6px; font-size: 12px; }
+  .link.g { color: var(--green); } .link.r { color: var(--red); } .link.m { color: var(--faint); }
+  .tbl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px; }
+  .tools { display: flex; gap: 2px; flex-wrap: wrap; }
+  .tblwrap { overflow-x: auto; margin: 0 -12px; padding: 0 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; min-width: 680px; }
+  th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); font-weight: 500; padding: 6px 6px; }
+  td { padding: 8px 6px; border-top: 1px solid var(--hairline); white-space: nowrap; }
+  .tr-r { text-align: right; } .tr-l { text-align: left; }
+  td.note { color: var(--muted); white-space: normal; min-width: 90px; }
+  .empty { font-size: 13.5px; color: var(--muted); }
+  .banner { border-radius: 10px; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; }
+  .warn { background: #FBF3E4; border: 1px solid #E6D5A8; color: #7A5C10; }
+  .info { background: #EAF1EE; border: 1px solid #C7DAD2; color: #2C4A40; }
+  .rf-inline { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .rf-inline input { width: 66px; padding: 6px 7px; text-align: right; }
+  .risk-note { font-size: 11.5px; color: var(--faint); line-height: 1.55; margin-top: 8px; }
+  .section-intro { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; line-height: 1.5; }
+  .rank-1 { background: #F1F7F4; }
+  .scorebar { display: inline-block; width: 46px; height: 6px; border-radius: 3px; background: #E4E9E7; vertical-align: middle; margin-right: 6px; position: relative; overflow: hidden; }
+  .scorebar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--green); }
+  .pill { font-size: 10.5px; padding: 1px 7px; border-radius: 10px; font-weight: 500; }
+  .pill-b { background: #E4EFEA; color: #1F6F54; } .pill-m { background: #FBF3E4; color: #A8791B; } .pill-a { background: #F5E4DE; color: #A0432C; }
+  .pill-port { background: #E5EAF5; color: #35538C; } .pill-cand { background: #ECEDEA; color: #5C6B66; }
+  .pill-core { background: #EDE7F5; color: #5B3E8C; }
+  .wcard { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; margin-bottom: 7px; }
+  .wcard.top { background: #F1F7F4; border-color: #C3DCCD; }
+  .wcard .rk { font-size: 13px; color: var(--faint); min-width: 18px; }
+  .wcard .nm { flex: 1; min-width: 0; }
+  .wcard .nm .t { font-weight: 600; font-size: 14px; }
+  .wcard .nm .s { font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .wcard .er { text-align: right; font-weight: 600; font-size: 15px; }
+  .wcard .sc { text-align: right; min-width: 42px; }
+  .wcard .sc b { font-size: 15px; }
+  .wviewseg { display: inline-flex; gap: 2px; }
+  .wviewseg button { font-size: 11.5px; padding: 4px 9px; border-radius: 6px; border: 1px solid #C9D1CE; background: #F3F5F4; color: var(--muted); cursor: pointer; }
+  .wviewseg button.on { background: var(--green); color: #fff; border-color: var(--green); }
+  .chk { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .chk input { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--green); flex-shrink: 0; }
+  footer { font-size: 11.5px; color: var(--faint); line-height: 1.55; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Registro di performance · portafoglio satellite</div>
+    <h1>Calcolatore TWR</h1>
+    <p>Rendimento time-weighted, neutralizzato per versamenti e prelievi. Il valore di ogni rilevazione = <em>titoli a mercato + liquidità satellite</em>. I movimenti di cassa sono solo denaro che entra o esce dal satellite dall'esterno.</p>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab on" data-tab="perf" onclick="setTab('perf')">Performance</button>
+    <button class="tab" data-tab="risk" onclick="setTab('risk')">Rischio</button>
+    <button class="tab" data-tab="watch" onclick="setTab('watch')">Watchlist</button>
+  </nav>
+  <div id="tab-perf" class="tabpane"></div>
+  <div id="tab-risk" class="tabpane" hidden></div>
+  <div id="tab-watch" class="tabpane" hidden></div>
+
+  <div id="metrics" class="metrics" hidden></div>
+  <section id="chartCard" class="card" hidden>
+    <div class="chart-head">
+      <h2 style="margin:0">Indice TWR (base 100) vs traiettoria 15% annuo</h2>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--green)"></span>Portafoglio</span>
+        <span><span class="sw" style="background:var(--amber)"></span>Target 15%</span>
+        <span><span class="sw" style="background:#3E6DB5"></span>Benchmark</span>
+      </div>
+    </div>
+    <div id="chart"></div>
+  </section>
+
+  <section id="riskCard" class="card">
+    <div class="chart-head">
+      <h2 style="margin:0">Rischio e Sharpe ratio</h2>
+      <label class="rf-inline">Risk-free annuo
+        <input type="text" inputmode="decimal" id="fRf" class="num" placeholder="2,0"> %
+      </label>
+    </div>
+    <div id="riskMetrics" class="metrics"></div>
+    <div id="riskNote" class="risk-note"></div>
+  </section>
+
+  <section id="sec-form" class="card">
+    <h2 id="formTitle">Nuova rilevazione</h2>
+    <form onsubmit="return false">
+      <div class="grid">
+        <label><span class="l">Data</span><input type="date" id="fDate" class="num"></label>
+        <label><span class="l">Valore titoli (€) <small>· posizioni a mercato</small></span>
+          <input type="text" inputmode="decimal" id="fTitoli" class="num" placeholder="es. 13200,00" oninput="updTotale()"></label>
+        <label><span class="l">Liquidità satellite (€) <small>· cash non investito</small></span>
+          <input type="text" inputmode="decimal" id="fCash" class="num" placeholder="0 se tutto investito" oninput="updTotale()"></label>
+        <label><span class="l">Movimento di cassa <small>· solo denaro esterno</small></span>
+          <div class="seg" id="fSeg">
+            <button type="button" data-k="none" onclick="setFlowKind('none')">Nessuno</button>
+            <button type="button" data-k="in" onclick="setFlowKind('in')">Versamento</button>
+            <button type="button" data-k="out" onclick="setFlowKind('out')">Prelievo</button>
+          </div>
+          <input type="text" inputmode="decimal" id="fFlow" class="num" placeholder="importo (€)" style="margin-top:6px" hidden></label>
+        <label><span class="l">Nota <small>· facoltativa</small></span>
+          <input type="text" id="fNote" placeholder="es. sfoltimento cluster software"></label>
+        <label><span class="l">Benchmark <small>· livello indice/ETF, facolt.</small></span>
+          <input type="text" inputmode="decimal" id="fBench" class="num" placeholder="es. MSCI World / Amundi ETF"></label>
+      </div>
+      <div id="totLive" class="tot-live" hidden></div>
+      <div class="err" id="formErr" hidden></div>
+      <div class="btns">
+        <button class="primary" id="btnSubmit" onclick="submitEntry()">Aggiungi rilevazione</button>
+        <button class="ghost-btn" id="btnCancel" onclick="resetForm()" hidden>Annulla</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="sec-registry" class="card">
+    <div class="tbl-head">
+      <h2 style="margin:0">Registro rilevazioni</h2>
+      <div class="tools" id="tools"></div>
+    </div>
+    <div id="registry"></div>
+  </section>
+
+  <div id="warnings"></div>
+  <footer id="footer"></footer>
+
+  <section id="sec-watch" class="card" style="margin-top:22px">
+    <div class="tbl-head">
+      <h2 style="margin:0">Watchlist · selezione per rotazione</h2>
+      <div class="tools" id="wTools"></div>
+    </div>
+    <div id="wPriceStatus" class="risk-note" style="margin-bottom:8px"></div>
+    <p class="section-intro">Valore atteso a scenari e punteggio di rotazione dei tuoi titoli e candidati. Riflette le tue stime, non dati di mercato: triage, non verdetto.</p>
+
+    <button class="ghost-btn" id="wFormToggle" onclick="toggleWForm()" style="margin-bottom:6px">＋ Nuovo titolo</button>
+    <div id="wFormWrap" hidden>
+    <h2 id="wFormTitle" style="font-size:13px">Nuovo elemento</h2>
+    <form onsubmit="return false">
+      <div class="grid">
+        <label><span class="l">Nome / ticker</span><input type="text" id="wName" placeholder="es. RELX"></label>
+        <label><span class="l">Simbolo API <small>· per aggiorn. prezzi, facolt.</small></span><input type="text" id="wSym" placeholder="es. AMZN o BESI:XAMS"></label>
+        <label><span class="l">Tipo</span>
+          <div class="seg" id="wTipoSeg">
+            <button type="button" data-t="candidato" onclick="setTipo('candidato')">Candidato</button>
+            <button type="button" data-t="portafoglio" onclick="setTipo('portafoglio')">In portafoglio</button>
+          </div>
+        </label>
+        <label><span class="l">Prezzo attuale (€/$)</span><input type="text" inputmode="decimal" id="wPrice" class="num" placeholder="es. 38,50" oninput="wPreview()"></label>
+        <label><span class="l">Qualità framework <small>· 0–10, facolt.</small></span><input type="text" inputmode="decimal" id="wQual" class="num" placeholder="es. 8,5"></label>
+      </div>
+      <div class="grid" style="margin-top:10px">
+        <label><span class="l">Correlazione col portafoglio</span>
+          <div class="seg" id="wCorrSeg">
+            <button type="button" data-c="bassa" onclick="setCorr('bassa')">Bassa</button>
+            <button type="button" data-c="media" onclick="setCorr('media')">Media</button>
+            <button type="button" data-c="alta" onclick="setCorr('alta')">Alta</button>
+          </div>
+        </label>
+        <label><span class="l">Fair value Bear</span><input type="text" inputmode="decimal" id="wBear" class="num" placeholder="es. 30" oninput="wPreview()"></label>
+        <label><span class="l">Fair value Base</span><input type="text" inputmode="decimal" id="wBase" class="num" placeholder="es. 45" oninput="wPreview()"></label>
+        <label><span class="l">Fair value Bull</span><input type="text" inputmode="decimal" id="wBull" class="num" placeholder="es. 60" oninput="wPreview()"></label>
+      </div>
+      <div class="grid" style="margin-top:10px">
+        <label><span class="l">Prob. Bear (%)</span><input type="text" inputmode="decimal" id="wPBear" class="num" placeholder="es. 25" oninput="wPreview()"></label>
+        <label><span class="l">Prob. Base (%)</span><input type="text" inputmode="decimal" id="wPBase" class="num" placeholder="es. 50" oninput="wPreview()"></label>
+        <label><span class="l">Prob. Bull (%)</span><input type="text" inputmode="decimal" id="wPBull" class="num" placeholder="es. 25" oninput="wPreview()"></label>
+        <label><span class="l">Nota <small>· facoltativa</small></span><input type="text" id="wNote" placeholder="es. catalyst Q3, entry ≤35"></label>
+      </div>
+      <label class="chk"><input type="checkbox" id="wCore"> <span>Core compounder — escludi dal segnale di rotazione (non lo vendo per motivi di prezzo)</span></label>
+      <div id="wPreviewBox" class="tot-live" hidden></div>
+      <div class="err" id="wErr" hidden></div>
+      <div class="btns">
+        <button class="primary" id="wBtnSubmit" onclick="submitCand()">Aggiungi</button>
+        <button class="ghost-btn" id="wBtnCancel" onclick="resetWForm()" hidden>Annulla</button>
+      </div>
+    </form>
+    </div>
+
+    <div id="wRotate" style="margin-top:14px"></div>
+    <div id="watchlist" style="margin-top:14px"></div>
+    <div id="wRankNote" class="risk-note"></div>
+  </section>
+</div>
+
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+
+<script>
+"use strict";
+const KEY = "twr-registro-v1";
+const WKEY = "twr-watchlist-v1";
+const RFKEY = "twr-rf-v1";
+let entries = [];
+let watchlist = [];
+let rf = null;              // tasso risk-free annuo (frazione, es. 0.02)
+let editingId = null;
+let wEditingId = null;
+let flowKind = "none";      // "none" | "in" | "out"
+let corrKind = "media";     // "bassa" | "media" | "alta"
+let candTipo = "candidato"; // "candidato" | "portafoglio"
+let wView = "semplice";     // "semplice" | "completa"
+try { const v = localStorage.getItem("twr-wview-v1"); if (v === "semplice" || v === "completa") wView = v; } catch (e) {}
+let wFormOpen = false;
+let wTypeFilter = "tutti"; // "tutti" | "portafoglio" | "candidato"
+let wPriceStatusMsg = "";
+let wUpdatingPrices = false;
+try { const tf = localStorage.getItem("twr-wtypefilter-v1"); if (["tutti", "portafoglio", "candidato"].includes(tf)) wTypeFilter = tf; } catch (e) {}
+let regFilter = "n12";      // filtro di visualizzazione del registro (solo vista, non intacca i calcoli)
+try { const rfil = localStorage.getItem("twr-regfilter-v1"); if (rfil) regFilter = rfil; } catch (e) {}
+
+// ---------- utilità ----------
+const eur = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 2 });
+const pct = (x, dec = 2) => (x == null || !isFinite(x)) ? "—"
+  : (x * 100).toLocaleString("it-IT", { minimumFractionDigits: dec, maximumFractionDigits: dec }) + "%";
+const fdate = iso => new Date(iso + "T00:00:00").toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" });
+const days = (a, b) => (new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 864e5;
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const parseNum = s => { if (s === "" || s == null) return null; const n = parseFloat(String(s).replace(",", ".")); return isNaN(n) ? NaN : n; };
+const $ = id => document.getElementById(id);
+
+// ---------- persistenza ----------
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (Array.isArray(p)) entries = p.map(migrate);
+    }
+  } catch (e) { entries = []; }
+}
+// compatibilità: i vecchi record avevano un solo campo "value"
+function migrate(e) {
+  const bench = (typeof e.bench === "number" && isFinite(e.bench)) ? e.bench : null;
+  if (e.titoli === undefined) {
+    return { id: e.id, date: e.date, titoli: e.value || 0, cash: 0, flow: e.flow || 0, note: e.note || "", bench };
+  }
+  return { id: e.id, date: e.date, titoli: e.titoli || 0, cash: e.cash || 0, flow: e.flow || 0, note: e.note || "", bench };
+}
+const tot = e => (e.titoli || 0) + (e.cash || 0);
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(entries)); } catch (e) {
+    alert("Salvataggio non riuscito (memoria del browser piena o bloccata). Esporta subito un backup JSON.");
+  }
+}
+function loadAux() {
+  try { const w = localStorage.getItem(WKEY); if (w) { const p = JSON.parse(w); if (Array.isArray(p)) watchlist = p; } } catch (e) {}
+  try { const r = localStorage.getItem(RFKEY); if (r != null && r !== "") rf = parseFloat(r); } catch (e) {}
+}
+function saveWatch() {
+  try { localStorage.setItem(WKEY, JSON.stringify(watchlist)); } catch (e) {
+    alert("Salvataggio watchlist non riuscito. Esporta un backup.");
+  }
+}
+function saveRf() { try { rf == null ? localStorage.removeItem(RFKEY) : localStorage.setItem(RFKEY, String(rf)); } catch (e) {} }
+
+// ---------- calcoli ----------
+function computeMWR(cfs) {
+  if (cfs.length < 2) return null;
+  const npv = r => cfs.reduce((s, c) => s + c.amount / Math.pow(1 + r, c.days / 365.25), 0);
+  let lo = -0.9999, hi = 10, fLo = npv(lo), fHi = npv(hi);
+  if (fLo * fHi > 0) return null;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2, fMid = npv(mid);
+    if (Math.abs(fMid) < 1e-9) return mid;
+    if (fLo * fMid < 0) { hi = mid; fHi = fMid; } else { lo = mid; fLo = fMid; }
+  }
+  return (lo + hi) / 2;
+}
+
+function calc() {
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
+  if (sorted.length < 2) return { sorted, periods: [], warnings: [] };
+  const periods = [], warnings = [];
+  let cum = 1;
+  for (let i = 1; i < sorted.length; i++) {
+    const prev = sorted[i - 1], cur = sorted[i];
+    const base = tot(prev) + (prev.flow || 0);
+    let r = null;
+    if (base > 0) { r = tot(cur) / base - 1; cum *= 1 + r; }
+    else warnings.push(`Periodo ${fdate(prev.date)} → ${fdate(cur.date)}: base nulla o negativa, escluso dal calcolo.`);
+    periods.push({ days: days(prev.date, cur.date), r, cumIndex: cum * 100 });
+  }
+  const first = sorted[0], last = sorted[sorted.length - 1];
+  const totalDays = days(first.date, last.date);
+  const twr = cum - 1;
+  const twrAnn = totalDays >= 1 ? Math.pow(1 + twr, 365.25 / totalDays) - 1 : null;
+  const cfs = [{ days: 0, amount: -(tot(first) + (first.flow || 0)) }];
+  for (let i = 1; i < sorted.length - 1; i++)
+    if (sorted[i].flow) cfs.push({ days: days(first.date, sorted[i].date), amount: -sorted[i].flow });
+  cfs.push({ days: totalDays, amount: tot(last) });
+  const mwr = totalDays >= 1 ? computeMWR(cfs) : null;
+  const netInvested = tot(first) + (first.flow || 0) + sorted.slice(1, -1).reduce((s, e) => s + (e.flow || 0), 0);
+
+  // ---- benchmark / alpha ----
+  // il benchmark non ha flussi: rendimento su un intervallo = livello_fine / livello_inizio - 1.
+  // Basta il primo e l'ultimo livello disponibili; confronto il TWR del portafoglio sullo STESSO sotto-intervallo.
+  let benchmark = { present: false };
+  const bIdx = sorted.map((e, i) => (e.bench != null && isFinite(e.bench) && e.bench > 0) ? i : -1).filter(i => i >= 0);
+  if (bIdx.length >= 2) {
+    const iS = bIdx[0], iE = bIdx[bIdx.length - 1];
+    const bStart = sorted[iS], bEnd = sorted[iE];
+    const benchRet = bEnd.bench / bStart.bench - 1;
+    // rendimento portafoglio concatenato tra iS e iE (product dei sotto-periodi)
+    let pm = 1, ok = true;
+    for (let k = iS; k < iE; k++) { const r = periods[k] ? periods[k].r : null; if (r == null) { ok = false; break; } pm *= 1 + r; }
+    const portRet = ok ? pm - 1 : null;
+    const mDays = days(bStart.date, bEnd.date);
+    const annu = x => (x != null && mDays >= 1) ? Math.pow(1 + x, 365.25 / mDays) - 1 : null;
+    const benchAnn = annu(benchRet), portAnn = annu(portRet);
+    benchmark = {
+      present: true, benchRet, portRet,
+      alphaCum: (portRet != null) ? portRet - benchRet : null,
+      benchAnn, portAnn,
+      alphaAnn: (portAnn != null && benchAnn != null) ? portAnn - benchAnn : null,
+      mDays, partial: !(iS === 0 && iE === sorted.length - 1),
+      startDate: bStart.date, endDate: bEnd.date
+    };
+  }
+
+  return { sorted, periods, twr, twrAnn, mwr, totalDays, netInvested, finalValue: tot(last), startDate: first.date, warnings, benchmark };
+}
+
+// ---------- rischio / Sharpe ----------
+function computeRisk(c) {
+  const rs = c.periods.map(p => p.r).filter(r => r != null && isFinite(r));
+  const n = rs.length;
+  if (n < 3 || !c.totalDays || c.totalDays < 1) return { insufficient: true, n };
+  const years = c.totalDays / 365.25;
+  const ppy = n / years;                              // rilevazioni per anno
+  const mean = rs.reduce((s, r) => s + r, 0) / n;
+  const varS = rs.reduce((s, r) => s + (r - mean) ** 2, 0) / (n - 1);
+  const sd = Math.sqrt(varS);
+  const annVol = sd * Math.sqrt(ppy);
+  const annRet = c.twrAnn;                            // rendimento annualizzato geometrico (già calcolato)
+  const rfv = rf != null && isFinite(rf) ? rf : 0;
+  const excess = annRet - rfv;
+  const sharpe = annVol > 0 ? excess / annVol : null;
+  // Sortino: solo deviazione al ribasso vs MAR periodico
+  const marP = rfv / ppy;
+  const dn = rs.map(r => Math.min(0, r - marP) ** 2);
+  const ddev = Math.sqrt(dn.reduce((s, x) => s + x, 0) / n);
+  const annDD = ddev * Math.sqrt(ppy);
+  const sortino = annDD > 0 ? excess / annDD : null;
+  return { insufficient: false, n, ppy, annVol, annRet, sharpe, sortino, rfUsed: rfv };
+}
+
+// ---------- watchlist: valore atteso a scenari + punteggio rotazione ----------
+function candMetrics(x) {
+  const P = x.price;
+  let pb = x.pBear, pba = x.pBase, pbu = x.pBull;
+  const sum = pb + pba + pbu;
+  if (sum <= 0) return null;
+  pb /= sum; pba /= sum; pbu /= sum;                  // normalizzo a 1
+  const expFV = pb * x.fvBear + pba * x.fvBase + pbu * x.fvBull;
+  const expRet = P > 0 ? expFV / P - 1 : null;
+  const upBull = P > 0 ? x.fvBull / P - 1 : null;
+  const dnBear = P > 0 ? x.fvBear / P - 1 : null;     // negativo se sotto prezzo
+  // reward/risk: guadagno atteso vs perdita nello scenario avverso
+  let rr = null;
+  if (expRet != null && dnBear != null) {
+    if (dnBear < 0) rr = expRet / Math.abs(dnBear);
+    else rr = expRet > 0 ? 99 : 0;                    // bear ancora sopra il prezzo = downside protetto
+  }
+  return { expFV, expRet, upBull, dnBear, rr };
+}
+function computeWatch() {
+  const rows = watchlist.map(x => ({ ...x, m: candMetrics(x) })).filter(x => x.m);
+  if (rows.length === 0) return { rows: [], ranked: [] };
+  // normalizzazione min-max entro il set per ciascun criterio
+  const vals = k => rows.map(x => x[k]).filter(v => v != null && isFinite(v));
+  const norm = (v, arr) => {
+    if (v == null || !isFinite(v) || arr.length === 0) return 0;
+    const mn = Math.min(...arr), mx = Math.max(...arr);
+    return mx === mn ? 0.5 : (v - mn) / (mx - mn);
+  };
+  const expArr = rows.map(x => x.m.expRet).filter(v => v != null && isFinite(v));
+  const rrArr = rows.map(x => x.m.rr).filter(v => v != null && isFinite(v));
+  const corrScore = c => c === "bassa" ? 1 : c === "media" ? 0.5 : 0;
+  // pesi: rendimento atteso 30 · reward/risk 25 · qualità 25 · decorrelazione 20
+  const W = { exp: 0.30, rr: 0.25, qual: 0.25, corr: 0.20 };
+  rows.forEach(x => {
+    const nExp = norm(x.m.expRet, expArr);
+    const nRR = norm(x.m.rr, rrArr);
+    const nQual = (x.qual != null && isFinite(x.qual)) ? Math.max(0, Math.min(1, x.qual / 10)) : 0.5;
+    const nCorr = corrScore(x.corr);
+    x.score = 100 * (W.exp * nExp + W.rr * nRR + W.qual * nQual + W.corr * nCorr);
+  });
+  const ranked = [...rows].sort((a, b) => b.score - a.score);
+  return { rows, ranked };
+}
+
+// ---------- render ----------
+function metricHTML(lbl, val, tone, hint, big) {
+  const t = tone || "neutral";
+  return `<div class="card metric m-${t}"><div class="lbl">${lbl}</div>
+    <div class="val num" ${big ? 'style="font-size:23px"' : ""}>${val}</div>
+    ${hint ? `<div class="hint">${hint}</div>` : ""}</div>`;
+}
+// tono per rendimenti annualizzati vs target 15%
+function toneAnn(x) { return x == null ? "neutral" : x >= 0.15 ? "good" : x >= 0 ? "warn" : "bad"; }
+
+function renderChart(c) {
+  const pts = [{ d: 0, idx: 100, tgt: 100 }];
+  let cd = 0;
+  c.periods.forEach(p => { cd += p.days; pts.push({ d: cd, idx: p.cumIndex, tgt: 100 * Math.pow(1.15, cd / 365.25) }); });
+  // punti benchmark, riscalati per coincidere col portafoglio al primo rilevamento con benchmark
+  let benchPts = [];
+  const bIdx = c.sorted.map((e, i) => (e.bench != null && isFinite(e.bench) && e.bench > 0) ? i : -1).filter(i => i >= 0);
+  if (bIdx.length >= 2) {
+    const iS = bIdx[0], base = pts[iS].idx, b0 = c.sorted[iS].bench;
+    benchPts = bIdx.map(i => ({ d: pts[i].d, v: base * (c.sorted[i].bench / b0) }));
+  }
+  const W = 720, H = 250, P = { l: 46, r: 12, t: 12, b: 22 };
+  const maxD = Math.max(1, ...pts.map(p => p.d));
+  const vals = pts.flatMap(p => [p.idx, p.tgt]).concat(benchPts.map(p => p.v));
+  const minV = Math.min(...vals) * 0.985, maxV = Math.max(...vals) * 1.015;
+  const x = d => P.l + (W - P.l - P.r) * d / maxD;
+  const y = v => H - P.b - (H - P.t - P.b) * (v - minV) / ((maxV - minV) || 1);
+  const line = k => pts.map((p, i) => `${i ? "L" : "M"}${x(p.d).toFixed(1)},${y(p[k]).toFixed(1)}`).join(" ");
+  const benchLine = benchPts.map((p, i) => `${i ? "L" : "M"}${x(p.d).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+  let grid = "";
+  for (let i = 0; i <= 3; i++) {
+    const v = minV + (maxV - minV) * i / 3;
+    grid += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#E4E9E7"/>
+      <text x="${P.l - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="#8A968F" class="num">${v.toFixed(0)}</text>`;
+  }
+  const dots = pts.map(p => `<circle cx="${x(p.d).toFixed(1)}" cy="${y(p.idx).toFixed(1)}" r="3" fill="#1F6F54"/>`).join("");
+  const benchPath = benchPts.length >= 2 ? `<path d="${benchLine}" fill="none" stroke="#3E6DB5" stroke-width="1.75"/>` : "";
+  $("chart").innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Indice TWR contro target e benchmark">
+    ${grid}
+    <path d="${line("tgt")}" fill="none" stroke="#C8930A" stroke-width="1.5" stroke-dasharray="5 4"/>
+    ${benchPath}
+    <path d="${line("idx")}" fill="none" stroke="#1F6F54" stroke-width="2.25"/>${dots}</svg>`;
+}
+
+function render() {
+  const c = calc();
+  const hasData = c.sorted.length >= 2;
+
+  // metriche
+  $("metrics").hidden = !hasData;
+  $("chartCard").hidden = !hasData;
+  if (hasData) {
+    const out = c.twrAnn == null ? null : c.twrAnn - 0.15;
+    const toneCum = c.twr >= 0 ? "good" : "bad";
+    const toneScarto = out == null ? "neutral" : out >= 0 ? "good" : out >= -0.05 ? "warn" : "bad";
+    let metricsHTML =
+      metricHTML("TWR cumulato", pct(c.twr), toneCum, null, true) +
+      metricHTML("TWR annualizzato", pct(c.twrAnn), toneAnn(c.twrAnn),
+        c.totalDays < 90 ? "orizzonte &lt; 90 gg: poco significativo" : null) +
+      metricHTML("MWR (money-weighted)", pct(c.mwr), toneAnn(c.mwr), "sensibile al timing dei flussi") +
+      metricHTML("Scarto vs target 15%", out == null ? "—" : (out >= 0 ? "+" : "") + pct(out),
+        toneScarto, "su base annualizzata");
+    const bm = c.benchmark;
+    if (bm && bm.present) {
+      const aHint = bm.alphaAnn != null ? `${(bm.alphaAnn >= 0 ? "+" : "") + pct(bm.alphaAnn)} annualizz.` : "su periodo con benchmark";
+      metricsHTML +=
+        metricHTML("Rend. benchmark", pct(bm.benchRet), "neutral",
+          bm.benchAnn != null ? `${pct(bm.benchAnn)} annualizz.` : null) +
+        metricHTML("Alpha vs benchmark", bm.alphaCum == null ? "—" : (bm.alphaCum >= 0 ? "+" : "") + pct(bm.alphaCum),
+          bm.alphaCum == null ? "neutral" : bm.alphaCum >= 0 ? "good" : "bad", aHint);
+    }
+    $("metrics").innerHTML = metricsHTML;
+    renderChart(c);
+  }
+
+  // strumenti registro
+  $("tools").innerHTML = entries.length
+    ? `<button class="link m" onclick="exportJSON()">Esporta backup</button>
+       <button class="link m" onclick="$('importFile').click()">Importa</button>
+       <button class="link m" onclick="askReset()">Azzera</button>`
+    : `<button class="link m" onclick="$('importFile').click()">Importa backup</button>`;
+
+  // tabella
+  if (!c.sorted.length) {
+    $("registry").innerHTML = `<div class="empty">Il registro è vuoto. Inserisci la prima rilevazione con il valore attuale dei titoli satellite e l'eventuale liquidità: farà da base di partenza. Da lì in poi, aggiorna a ogni operazione o versa/preleva (e una foto periodica, ad es. a fine mese).</div>`;
+  } else {
+    // indici da mostrare secondo il filtro (la vista non cambia mai i calcoli)
+    const n = c.sorted.length;
+    const years = [...new Set(c.sorted.map(e => e.date.slice(0, 4)))].sort().reverse();
+    const show = new Set();
+    const today = new Date();
+    const cutoff = months => { const d = new Date(today); d.setMonth(d.getMonth() - months); return d.toISOString().slice(0, 10); };
+    if (regFilter === "all") { for (let i = 0; i < n; i++) show.add(i); }
+    else if (regFilter === "m3" || regFilter === "m12") {
+      const lim = cutoff(regFilter === "m3" ? 3 : 12);
+      c.sorted.forEach((e, i) => { if (e.date >= lim) show.add(i); });
+    } else if (regFilter.startsWith("y")) {
+      const y = regFilter.slice(1);
+      c.sorted.forEach((e, i) => { if (e.date.slice(0, 4) === y) show.add(i); });
+    } else { // "n12" / "n26"
+      const k = regFilter === "n3" ? 3 : regFilter === "n26" ? 26 : 12;
+      for (let i = Math.max(0, n - k); i < n; i++) show.add(i);
+    }
+    // opzioni tendina
+    const opt = (v, lbl) => `<option value="${v}"${regFilter === v ? " selected" : ""}>${lbl}</option>`;
+    const yearOpts = years.map(y => opt("y" + y, "Anno " + y)).join("");
+    const selectHTML = `<select id="regFilter" onchange="setRegFilter(this.value)" class="regsel">
+      ${opt("n3", "Ultime 3")}${opt("n12", "Ultime 12")}${opt("n26", "Ultime 26")}
+      ${opt("m3", "Ultimi 3 mesi")}${opt("m12", "Ultimi 12 mesi")}
+      ${yearOpts}${opt("all", "Tutte")}
+    </select>`;
+
+    let rows = "";
+    let shownCount = 0;
+    c.sorted.forEach((e, i) => {
+      if (!show.has(i)) return;
+      shownCount++;
+      const p = i > 0 ? c.periods[i - 1] : null;   // periodo reale rispetto alla riga precedente nella serie completa
+      const rCls = p == null || p.r == null ? "none" : p.r >= 0 ? "pos" : "neg";
+      const rTxt = p == null ? "base" : p.r == null ? "n/d" : (p.r >= 0 ? "+" : "") + pct(p.r);
+      rows += `<tr>
+        <td class="num">${fdate(e.date)}</td>
+        <td class="num tr-r">${eur.format(e.titoli)}</td>
+        <td class="num tr-r" style="color:${e.cash ? "var(--ink)" : "var(--ghost)"}">${e.cash ? eur.format(e.cash) : "—"}</td>
+        <td class="num tr-r" style="font-weight:600">${eur.format(tot(e))}</td>
+        <td class="num tr-r" style="color:${e.flow ? "var(--ink)" : "var(--ghost)"}">${e.flow ? (e.flow > 0 ? "+" : "") + eur.format(e.flow) : "—"}</td>
+        <td class="num tr-r ${rCls}" style="font-weight:500">${rTxt}</td>
+        <td class="num tr-r" style="color:${e.bench != null ? "var(--ink)" : "var(--ghost)"}">${e.bench != null && isFinite(e.bench) ? e.bench.toLocaleString("it-IT") : "—"}</td>
+        <td class="note">${esc(e.note || "")}</td>
+        <td class="tr-r">
+          <button class="link g" onclick="editEntry('${e.id}')">Modifica</button>
+          <button class="link r" onclick="deleteEntry('${e.id}')">Elimina</button>
+        </td></tr>`;
+    });
+    const bar = `<div class="reg-bar">${selectHTML}<span class="reg-count num">${shownCount} di ${n}</span></div>`;
+    $("registry").innerHTML = bar + `<div class="tblwrap"><table>
+      <thead><tr><th class="tr-l">Data</th><th class="tr-r">Titoli</th><th class="tr-r">Liquidità</th><th class="tr-r">Totale</th><th class="tr-r">Flusso</th>
+      <th class="tr-r">Rend. periodo</th><th class="tr-r">Bench.</th><th class="tr-l">Nota</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  // rischio / Sharpe
+  renderRisk(c);
+  // watchlist
+  renderWatch();
+
+  // avvisi + footer
+  $("warnings").innerHTML = (c.warnings || []).map(w => `<div class="banner warn">${w}</div>`).join("");
+  if (c.benchmark && c.benchmark.present && c.benchmark.partial) {
+    $("warnings").innerHTML += `<div class="banner info">Alpha calcolato solo sul tratto con dati benchmark (${fdate(c.benchmark.startDate)} → ${fdate(c.benchmark.endDate)}), non sull'intero storico. Inserisci il benchmark su tutte le rilevazioni per un confronto pieno.</div>`;
+  }
+  $("footer").innerHTML = hasData
+    ? `<span class="num">${c.sorted.length}</span> rilevazioni dal <span class="num">${fdate(c.startDate)}</span> ·
+       <span class="num">${Math.round(c.totalDays)}</span> giorni · capitale netto conferito
+       <span class="num">${eur.format(c.netInvested)}</span> · valore attuale
+       <span class="num">${eur.format(c.finalValue)}</span>.
+       Il TWR misura l'abilità di gestione (indipendente dai flussi); il MWR misura il rendimento del tuo capitale (dipende dal timing dei conferimenti).
+       I dati vivono solo su questo dispositivo: esporta periodicamente un backup JSON.`
+    : "";
+}
+
+function renderRisk(c) {
+  const hasData = c.sorted && c.sorted.length >= 2;
+  // valore del campo Rf
+  if (document.activeElement !== $("fRf"))
+    $("fRf").value = rf != null ? (rf * 100).toLocaleString("it-IT") : "";
+  if (!hasData) {
+    $("riskMetrics").innerHTML = "";
+    $("riskNote").innerHTML = `Servono almeno due rilevazioni nel registro (scheda Performance) per calcolare le metriche di rischio.`;
+    return;
+  }
+  const r = computeRisk(c);
+  if (r.insufficient) {
+    $("riskMetrics").innerHTML = "";
+    $("riskNote").innerHTML = `Servono almeno 3 sotto-periodi per stimare la volatilità: al momento ne hai <b class="num">${r.n}</b>. Aggiungi qualche rilevazione periodica (anche senza operazioni) per abilitare Sharpe e Sortino.`;
+    return;
+  }
+  const toneRatio = v => v == null ? "neutral" : v >= 1 ? "good" : v >= 0 ? "warn" : "bad";
+  const excess = r.annRet - r.rfUsed;
+  $("riskMetrics").innerHTML =
+    metricHTML("Sharpe ratio", r.sharpe == null ? "—" : r.sharpe.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), toneRatio(r.sharpe), "rendimento per unità di rischio", true) +
+    metricHTML("Sortino ratio", r.sortino == null ? "—" : r.sortino.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), toneRatio(r.sortino), "penalizza solo il ribasso") +
+    metricHTML("Volatilità annualizzata", pct(r.annVol, 1), "neutral", "stimata dalle rilevazioni") +
+    metricHTML("Rend. annualizz. − risk-free", pct(excess), toneAnn(excess), `Rf ${pct(r.rfUsed, 1)} · ${r.n} oss.`);
+  $("riskNote").innerHTML = `<b>Attenzione alla lettura:</b> la volatilità è stimata da <span class="num">${r.n}</span> rilevazioni sporadiche (~<span class="num">${r.ppy.toFixed(0)}</span>/anno), quindi non cattura le oscillazioni tra una foto e l'altra: la vera volatilità è più alta e di conseguenza lo Sharpe qui è <b>sovrastimato</b>. Con questi dati è un indicatore orientativo, non una misura affidabile — diventa significativo solo con rilevazioni frequenti e regolari (idealmente mensili su più anni). Convenzione: Sharpe ≥ 1 buono, ≥ 2 ottimo, ma solo su serie robuste.`;
+}
+
+function renderWatch() {
+  const { rows, ranked } = computeWatch();
+  const viewToggle = `<span class="wviewseg">
+    <button class="${wView === "semplice" ? "on" : ""}" onclick="setWView('semplice')">Semplice</button>
+    <button class="${wView === "completa" ? "on" : ""}" onclick="setWView('completa')">Completa</button></span>`;
+  const nSym = watchlist.filter(x => x.sym && x.sym.trim()).length;
+  const updateBtn = nSym > 0 ? ` <button class="link g" id="wUpdateBtn" onclick="updatePrices()">Aggiorna prezzi (${nSym})</button>` : "";
+  $("wTools").innerHTML = (rows.length ? viewToggle : "") + updateBtn +
+    (watchlist.length ? ` <button class="link m" onclick="askWReset()">Azzera</button>` : "");
+  $("wPriceStatus").innerHTML = wPriceStatusMsg || "";
+  if (rows.length === 0) {
+    $("watchlist").innerHTML = `<div class="empty">Vuota. Tocca <b>＋ Nuovo titolo</b> e inserisci prezzo, fair value Bear/Base/Bull e probabilità. Marca come <b>In portafoglio</b> i titoli che hai e <b>Candidato</b> quelli da valutare.</div>`;
+    $("wRotate").innerHTML = "";
+    $("wRankNote").innerHTML = "";
+    return;
+  }
+  const maxScore = Math.max(...ranked.map(x => x.score), 1);
+  const corrPill = c => c === "bassa" ? '<span class="pill pill-b">bassa</span>' : c === "alta" ? '<span class="pill pill-a">alta</span>' : '<span class="pill pill-m">media</span>';
+  const tipoPill = t => t === "portafoglio" ? '<span class="pill pill-port">in ptf</span>' : '<span class="pill pill-cand">cand.</span>';
+
+  // filtro per tipo (solo vista); il rank mostrato resta quello globale della classifica
+  const globalRank = {}; ranked.forEach((x, i) => globalRank[x.id] = i + 1);
+  const nPort = ranked.filter(x => (x.tipo || "candidato") === "portafoglio").length;
+  const nCand = ranked.length - nPort;
+  const shown = ranked.filter(x => wTypeFilter === "tutti" || (x.tipo || "candidato") === wTypeFilter);
+  const fbtn = (v, lbl) => `<button class="${wTypeFilter === v ? "on" : ""}" onclick="setWTypeFilter('${v}')">${lbl}</button>`;
+  const filterBar = `<div class="wviewseg" style="margin-bottom:10px">
+    ${fbtn("tutti", "Tutti " + ranked.length)}${fbtn("portafoglio", "Portafoglio " + nPort)}${fbtn("candidato", "Candidati " + nCand)}</div>`;
+
+  if (shown.length === 0) {
+    $("watchlist").innerHTML = filterBar + `<div class="empty">Nessun elemento in questa categoria.</div>`;
+  } else if (wView === "semplice") {
+    // ---- vista semplice: lista di card essenziali ----
+    let cards = "";
+    shown.forEach(x => {
+      const gr = globalRank[x.id];
+      const badges = tipoPill(x.tipo || "candidato") + (x.core ? ' <span class="pill pill-core">core</span>' : '');
+      cards += `<div class="wcard ${gr === 1 ? "top" : ""}">
+        <span class="rk num">${gr}</span>
+        <span class="nm"><div class="t">${esc(x.name)}</div><div class="s">${badges}</div></span>
+        <span class="er num ${x.m.expRet >= 0 ? "pos" : "neg"}">${(x.m.expRet >= 0 ? "+" : "") + pct(x.m.expRet, 0)}</span>
+        <span class="sc"><span class="scorebar"><i style="width:${(x.score / maxScore * 100).toFixed(0)}%"></i></span><br><b class="num">${x.score.toFixed(0)}</b></span>
+      </div>`;
+    });
+    $("watchlist").innerHTML = filterBar + cards + `<div class="risk-note" style="margin-top:2px">Il numero è la posizione nella classifica generale. «Completa» per il dettaglio, «＋ Nuovo titolo» per modificare.</div>`;
+  } else {
+    // ---- vista completa: tabella dettagliata ----
+    let body = "";
+    shown.forEach(x => {
+      const gr = globalRank[x.id];
+      const m = x.m;
+      const rrTxt = m.rr == null ? "—" : (m.rr >= 99 ? "protetto" : m.rr.toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "×");
+      body += `<tr class="${gr === 1 ? "rank-1" : ""}">
+        <td class="tr-l" style="font-weight:${gr === 1 ? 600 : 400}">${gr}. ${esc(x.name)}</td>
+        <td class="tr-l">${tipoPill(x.tipo || "candidato")}${x.core ? ' <span class="pill pill-core">core</span>' : ''}</td>
+        <td class="num tr-r">${x.price.toLocaleString("it-IT")}</td>
+        <td class="num tr-r">${m.expFV.toLocaleString("it-IT", { maximumFractionDigits: 2 })}</td>
+        <td class="num tr-r ${m.expRet >= 0 ? "pos" : "neg"}" style="font-weight:500">${(m.expRet >= 0 ? "+" : "") + pct(m.expRet, 1)}</td>
+        <td class="num tr-r none">${m.upBull != null ? "+" + pct(m.upBull, 0) : "—"} / <span class="${m.dnBear < 0 ? "neg" : "pos"}">${m.dnBear != null ? (m.dnBear >= 0 ? "+" : "") + pct(m.dnBear, 0) : "—"}</span></td>
+        <td class="num tr-r">${rrTxt}</td>
+        <td class="num tr-r">${x.qual != null && isFinite(x.qual) ? x.qual.toLocaleString("it-IT") : "—"}</td>
+        <td class="tr-l">${corrPill(x.corr)}</td>
+        <td class="tr-r"><span class="scorebar"><i style="width:${(x.score / maxScore * 100).toFixed(0)}%"></i></span><b class="num">${x.score.toFixed(0)}</b></td>
+        <td class="tr-r">
+          <button class="link g" onclick="editCand('${x.id}')">Mod.</button>
+          <button class="link r" onclick="deleteCand('${x.id}')">Elim.</button>
+        </td></tr>`;
+    });
+    $("watchlist").innerHTML = filterBar + `<div class="tblwrap"><table style="min-width:820px">
+      <thead><tr>
+        <th class="tr-l">#  Nome</th><th class="tr-l">Tipo</th><th class="tr-r">Prezzo</th><th class="tr-r">FV atteso</th>
+        <th class="tr-r">Rend. atteso</th><th class="tr-r">Bull / Bear</th><th class="tr-r">R/R</th>
+        <th class="tr-r">Qualità</th><th class="tr-l">Corr.</th><th class="tr-r">Punteggio</th><th></th>
+      </tr></thead><tbody>${body}</tbody></table></div>`;
+  }
+
+  // ---- box rotazione: candidati che battono titoli in portafoglio ----
+  const MARGINE = 8; // punti minimi per giustificare tasse/attrito di switch
+  const coreCount = ranked.filter(x => (x.tipo || "candidato") === "portafoglio" && x.core).length;
+  const holds = ranked.filter(x => (x.tipo || "candidato") === "portafoglio" && !x.core); // i core non sono mai target di rotazione
+  const cands = ranked.filter(x => (x.tipo || "candidato") === "candidato");
+  if (holds.length === 0 || cands.length === 0) {
+    $("wRotate").innerHTML = `<div class="banner info">Per il confronto di rotazione, inserisci sia titoli <b>In portafoglio</b> sia <b>Candidati</b>. Ora hai ${holds.length} in portafoglio e ${cands.length} candidati.</div>`;
+  } else {
+    // per ogni candidato, il titolo in ptf più debole che supera di almeno MARGINE
+    const pairs = [];
+    cands.forEach(cnd => {
+      holds.forEach(h => {
+        const delta = cnd.score - h.score;
+        if (delta >= MARGINE) pairs.push({ cnd, h, delta });
+      });
+    });
+    pairs.sort((a, b) => b.delta - a.delta);
+    const coreNote = coreCount > 0 ? ` <span style="font-size:12px">(${coreCount} titolo/i core esclusi dal segnale)</span>` : "";
+    if (pairs.length === 0) {
+      $("wRotate").innerHTML = `<div class="banner info"><b>Nessuna rotazione evidente.</b>${coreNote} Nessun candidato supera un titolo che possiedi di almeno ${MARGINE} punti — il margine minimo che ho impostato per coprire tasse (26%) e attrito di switch. I candidati non sono abbastanza migliori da giustificare la vendita.</div>`;
+    } else {
+      const seen = new Set();
+      const lines = [];
+      pairs.forEach(p => {
+        const key = p.cnd.id + ">" + p.h.id;
+        if (seen.has(key)) return; seen.add(key);
+        if (lines.length < 4)
+          lines.push(`<li><b>${esc(p.cnd.name)}</b> (${p.cnd.score.toFixed(0)}) &gt; <b>${esc(p.h.name)}</b> (${p.h.score.toFixed(0)}) · +${p.delta.toFixed(0)} punti · rend. atteso ${(p.cnd.m.expRet >= 0 ? "+" : "") + pct(p.cnd.m.expRet, 0)} vs ${(p.h.m.expRet >= 0 ? "+" : "") + pct(p.h.m.expRet, 0)}</li>`);
+      });
+      $("wRotate").innerHTML = `<div class="banner warn"><b>Possibili rotazioni</b> (candidato nettamente sopra un titolo che hai):${coreNote}
+        <ul style="margin:6px 0 0; padding-left:18px">${lines.join("")}</ul>
+        <div style="margin-top:6px; font-size:12px">Prima di ruotare, sottrai mentalmente il costo: la vendita realizza plusvalenze tassate al 26% e paghi lo spread. Il candidato deve restare migliore <i>al netto</i> di questo. E se un tuo titolo compare qui, chiediti prima se non sia il tuo fair value a essere troppo prudente — un compounder di qualità va ri-sottoscritto, non tagliato.</div></div>`;
+    }
+  }
+
+  const top = ranked[0];
+  $("wRankNote").innerHTML = rows.length < 2
+    ? `Con un solo elemento il punteggio non è comparativo: aggiungine altri per un ordinamento relativo.`
+    : `In testa: <b>${esc(top.name)}</b> (${top.score.toFixed(0)}/100). Pesi: rendimento atteso 30% · reward/risk 25% · qualità 25% · decorrelazione 20%. Il punteggio è <b>relativo</b> agli elementi inseriti e riflette le tue stime — triage, non verdetto. La rotazione richiede un margine, non un pareggio: un candidato che pareggia un titolo che hai non vale i costi di switch.`;
+}
+
+// ---------- azioni ----------
+function updTotale() {
+  const t = parseNum($("fTitoli").value), c = parseNum($("fCash").value);
+  const el = $("totLive");
+  const hasT = t != null && !isNaN(t);
+  const hasC = c != null && !isNaN(c);
+  if (!hasT && !hasC) { el.hidden = true; return; }
+  const total = (hasT ? t : 0) + (hasC ? c : 0);
+  el.hidden = false;
+  el.innerHTML = `Totale rilevazione (base del TWR): <b class="num">${eur.format(total)}</b>`;
+}
+
+function setFlowKind(k) {
+  flowKind = k;
+  const btns = $("fSeg").querySelectorAll("button");
+  btns.forEach(b => {
+    const on = b.dataset.k === k;
+    b.className = on ? ("on-" + k) : "";
+  });
+  const fld = $("fFlow");
+  if (k === "none") { fld.hidden = true; fld.value = ""; }
+  else { fld.hidden = false; fld.placeholder = (k === "in" ? "importo versato (€)" : "importo prelevato (€)"); fld.focus(); }
+}
+
+function showErr(msg) { const el = $("formErr"); el.textContent = msg; el.hidden = !msg; }
+
+function resetForm() {
+  editingId = null;
+  $("fDate").value = new Date().toISOString().slice(0, 10);
+  $("fTitoli").value = ""; $("fCash").value = ""; $("fFlow").value = ""; $("fNote").value = ""; $("fBench").value = "";
+  setFlowKind("none");
+  updTotale();
+  $("formTitle").textContent = "Nuova rilevazione";
+  $("btnSubmit").textContent = "Aggiungi rilevazione";
+  $("btnCancel").hidden = true;
+  showErr("");
+}
+
+function submitEntry() {
+  const date = $("fDate").value;
+  const titoli = parseNum($("fTitoli").value);
+  let cash = parseNum($("fCash").value);
+  if ($("fCash").value === "") cash = 0;
+  let flow = 0;
+  if (flowKind !== "none") {
+    const amt = parseNum($("fFlow").value);
+    if (amt == null || isNaN(amt) || amt <= 0)
+      return showErr("Inserisci l'importo del " + (flowKind === "in" ? "versamento" : "prelievo") + " (numero positivo).");
+    flow = flowKind === "in" ? Math.abs(amt) : -Math.abs(amt);
+  }
+  if (!date) return showErr("Inserisci una data.");
+  if (titoli == null || isNaN(titoli) || titoli < 0) return showErr("Inserisci il valore titoli (numero ≥ 0).");
+  if (isNaN(cash) || cash < 0) return showErr("La liquidità deve essere un numero ≥ 0 (o vuota).");
+  let bench = parseNum($("fBench").value);
+  if ($("fBench").value === "") bench = null;
+  else if (bench == null || isNaN(bench) || bench <= 0) return showErr("Il benchmark deve essere un numero positivo (o vuoto).");
+  if (entries.some(e => e.date === date && e.id !== editingId))
+    return showErr("Esiste già una rilevazione per questa data: modificala o eliminala.");
+  const note = $("fNote").value.trim();
+  if (editingId) {
+    entries = entries.map(e => e.id === editingId ? { ...e, date, titoli, cash, flow, note, bench } : e);
+  } else {
+    entries.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), date, titoli, cash, flow, note, bench });
+  }
+  entries.sort((a, b) => a.date.localeCompare(b.date));
+  save(); resetForm(); render();
+}
+
+function editEntry(id) {
+  const e = entries.find(x => x.id === id);
+  if (!e) return;
+  editingId = id;
+  $("fDate").value = e.date;
+  $("fTitoli").value = String(e.titoli).replace(".", ",");
+  $("fCash").value = e.cash ? String(e.cash).replace(".", ",") : "";
+  if (e.flow > 0) setFlowKind("in");
+  else if (e.flow < 0) setFlowKind("out");
+  else setFlowKind("none");
+  $("fFlow").value = e.flow ? String(Math.abs(e.flow)).replace(".", ",") : "";
+  $("fNote").value = e.note || "";
+  $("fBench").value = (e.bench != null && isFinite(e.bench)) ? String(e.bench).replace(".", ",") : "";
+  updTotale();
+  $("formTitle").textContent = "Modifica rilevazione";
+  $("btnSubmit").textContent = "Salva modifiche";
+  $("btnCancel").hidden = false;
+  showErr("");
+  window.scrollTo({ top: $("formTitle").offsetTop - 20, behavior: "smooth" });
+}
+
+function deleteEntry(id) {
+  if (!confirm("Eliminare questa rilevazione?")) return;
+  entries = entries.filter(e => e.id !== id);
+  if (editingId === id) resetForm();
+  save(); render();
+}
+
+function askReset() {
+  if (confirm("Azzerare l'intero registro? L'operazione è irreversibile (esporta prima un backup se serve).")) {
+    entries = []; resetForm();
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    render();
+  }
+}
+
+// ---- filtro registro (solo vista) ----
+function setRegFilter(v) {
+  regFilter = v;
+  try { localStorage.setItem("twr-regfilter-v1", v); } catch (e) {}
+  render();
+}
+
+// ---- risk-free ----
+$("fRf").addEventListener("input", () => {
+  const v = parseNum($("fRf").value);
+  rf = (v == null || isNaN(v)) ? null : v / 100;
+  saveRf();
+  render();
+});
+
+// ---- watchlist ----
+function setCorr(k) {
+  corrKind = k;
+  $("wCorrSeg").querySelectorAll("button").forEach(b => b.className = (b.dataset.c === k ? "on-none" : ""));
+}
+function setTipo(k) {
+  candTipo = k;
+  $("wTipoSeg").querySelectorAll("button").forEach(b => b.className = (b.dataset.t === k ? "on-none" : ""));
+}
+function setWView(v) {
+  wView = v;
+  try { localStorage.setItem("twr-wview-v1", v); } catch (e) {}
+  renderWatch();
+}
+function setWTypeFilter(v) {
+  wTypeFilter = v;
+  try { localStorage.setItem("twr-wtypefilter-v1", v); } catch (e) {}
+  renderWatch();
+}
+function toggleWForm(force) {
+  wFormOpen = (force === undefined) ? !wFormOpen : force;
+  $("wFormWrap").hidden = !wFormOpen;
+  $("wFormToggle").textContent = wFormOpen ? "− Chiudi form" : "＋ Nuovo titolo";
+}
+function wShowErr(msg) { const el = $("wErr"); el.textContent = msg; el.hidden = !msg; }
+function wPreview() {
+  const price = parseNum($("wPrice").value);
+  const fvBear = parseNum($("wBear").value), fvBase = parseNum($("wBase").value), fvBull = parseNum($("wBull").value);
+  const pBear = parseNum($("wPBear").value) || 0, pBase = parseNum($("wPBase").value) || 0, pBull = parseNum($("wPBull").value) || 0;
+  const el = $("wPreviewBox");
+  if (!price || !fvBase || (pBear + pBase + pBull) <= 0) { el.hidden = true; return; }
+  const m = candMetrics({ price, fvBear: fvBear || fvBase, fvBase, fvBull: fvBull || fvBase, pBear, pBase, pBull });
+  if (!m) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML = `FV atteso <b class="num">${m.expFV.toLocaleString("it-IT", { maximumFractionDigits: 2 })}</b> · rend. atteso <b class="num">${(m.expRet >= 0 ? "+" : "") + pct(m.expRet, 1)}</b>`;
+}
+function resetWForm() {
+  wEditingId = null;
+  ["wName", "wSym", "wPrice", "wQual", "wBear", "wBase", "wBull", "wNote", "wPBear", "wPBase", "wPBull"].forEach(id => $(id).value = "");
+  setCorr("media");
+  setTipo("candidato");
+  $("wCore").checked = false;
+  $("wPreviewBox").hidden = true;
+  $("wFormTitle").textContent = "Nuovo elemento";
+  $("wBtnSubmit").textContent = "Aggiungi";
+  $("wBtnCancel").hidden = true;
+  wShowErr("");
+  toggleWForm(false);
+}
+function submitCand() {
+  const name = $("wName").value.trim();
+  const price = parseNum($("wPrice").value);
+  const fvBase = parseNum($("wBase").value);
+  let fvBear = parseNum($("wBear").value), fvBull = parseNum($("wBull").value);
+  const qual = parseNum($("wQual").value);
+  let pBear = parseNum($("wPBear").value), pBase = parseNum($("wPBase").value), pBull = parseNum($("wPBull").value);
+  if (!name) return wShowErr("Inserisci un nome / ticker.");
+  if (price == null || isNaN(price) || price <= 0) return wShowErr("Inserisci il prezzo attuale (> 0).");
+  if (fvBase == null || isNaN(fvBase) || fvBase <= 0) return wShowErr("Il fair value Base è obbligatorio (> 0).");
+  if (fvBear == null || isNaN(fvBear)) fvBear = fvBase;
+  if (fvBull == null || isNaN(fvBull)) fvBull = fvBase;
+  pBear = pBear || 0; pBase = pBase || 0; pBull = pBull || 0;
+  if (pBear + pBase + pBull <= 0) return wShowErr("Inserisci almeno una probabilità (verranno normalizzate a 100%).");
+  if (qual != null && !isNaN(qual) && (qual < 0 || qual > 10)) return wShowErr("La qualità va da 0 a 10.");
+  const rec = {
+    id: wEditingId || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+    name, sym: $("wSym").value.trim(), price, fvBear, fvBase, fvBull, pBear, pBase, pBull,
+    qual: (qual == null || isNaN(qual)) ? null : qual,
+    corr: corrKind, tipo: candTipo, core: $("wCore").checked, note: $("wNote").value.trim()
+  };
+  if (wEditingId) watchlist = watchlist.map(x => x.id === wEditingId ? rec : x);
+  else watchlist.push(rec);
+  saveWatch(); resetWForm(); renderWatch();
+}
+function editCand(id) {
+  const x = watchlist.find(w => w.id === id);
+  if (!x) return;
+  wEditingId = id;
+  $("wName").value = x.name;
+  $("wSym").value = x.sym || "";
+  $("wPrice").value = String(x.price).replace(".", ",");
+  $("wQual").value = x.qual != null ? String(x.qual).replace(".", ",") : "";
+  $("wBear").value = String(x.fvBear).replace(".", ",");
+  $("wBase").value = String(x.fvBase).replace(".", ",");
+  $("wBull").value = String(x.fvBull).replace(".", ",");
+  $("wPBear").value = x.pBear || ""; $("wPBase").value = x.pBase || ""; $("wPBull").value = x.pBull || "";
+  $("wNote").value = x.note || "";
+  setCorr(x.corr || "media");
+  setTipo(x.tipo || "candidato");
+  $("wCore").checked = !!x.core;
+  wPreview();
+  toggleWForm(true);
+  $("wFormTitle").textContent = "Modifica elemento";
+  $("wBtnSubmit").textContent = "Salva modifiche";
+  $("wBtnCancel").hidden = false;
+  wShowErr("");
+  window.scrollTo({ top: $("wFormTitle").offsetTop - 20, behavior: "smooth" });
+}
+function deleteCand(id) {
+  if (!confirm("Rimuovere questo candidato dalla watchlist?")) return;
+  watchlist = watchlist.filter(x => x.id !== id);
+  if (wEditingId === id) resetWForm();
+  saveWatch(); renderWatch();
+}
+function askWReset() {
+  if (confirm("Azzerare l'intera watchlist? Operazione irreversibile.")) {
+    watchlist = []; resetWForm();
+    try { localStorage.removeItem(WKEY); } catch (e) {}
+    renderWatch();
+  }
+}
+
+// ---- aggiornamento prezzi via funzione Netlify (Twelve Data) ----
+async function updatePrices() {
+  if (wUpdatingPrices) return;
+  const withSym = watchlist.filter(x => x.sym && x.sym.trim());
+  if (withSym.length === 0) return;
+  wUpdatingPrices = true;
+  wPriceStatusMsg = "Aggiornamento prezzi in corso…";
+  const btn = $("wUpdateBtn"); if (btn) { btn.textContent = "Aggiorno…"; btn.style.pointerEvents = "none"; }
+  renderWatch();
+
+  const us = [], eu = [];
+  withSym.forEach(x => {
+    const s = x.sym.trim();
+    if (s.includes(":")) eu.push(s); else us.push(s);
+  });
+
+  try {
+    const params = new URLSearchParams();
+    if (us.length) params.set("us", us.join(","));
+    if (eu.length) params.set("eu", eu.join(","));
+    const res = await fetch("/.netlify/functions/prices?" + params.toString());
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ("HTTP " + res.status));
+    }
+    const data = await res.json();
+    let updated = 0;
+    watchlist = watchlist.map(x => {
+      if (!x.sym) return x;
+      const hit = data.prices && data.prices[x.sym.trim()];
+      if (hit && isFinite(hit.price) && hit.price > 0) { updated++; return { ...x, price: hit.price }; }
+      return x;
+    });
+    saveWatch();
+    const errPart = (data.errors && data.errors.length) ? ` · ${data.errors.length} non aggiornati: ${data.errors.slice(0, 3).join("; ")}` : "";
+    const now = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    wPriceStatusMsg = `Aggiornati ${updated} di ${withSym.length} prezzi alle ${now}.${errPart}`;
+  } catch (e) {
+    wPriceStatusMsg = `Aggiornamento non riuscito: ${e.message}. Verifica che la funzione Netlify sia pubblicata e che TWELVE_DATA_API_KEY sia impostata.`;
+  } finally {
+    wUpdatingPrices = false;
+    renderWatch();
+  }
+}
+
+function exportJSON() {
+  const payload = { app: "twr-calc", version: 2, entries, watchlist, rf };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "twr-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$("importFile").addEventListener("change", ev => {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      // formato nuovo (oggetto) o legacy (array di rilevazioni)
+      const arr = Array.isArray(data) ? data : data.entries;
+      if (!Array.isArray(arr) || arr.some(e => !e.date || (typeof e.value !== "number" && typeof e.titoli !== "number")))
+        throw new Error("formato");
+      const hasStuff = entries.length || watchlist.length;
+      if (!hasStuff || confirm("Sostituire registro e watchlist attuali con il backup importato?")) {
+        entries = arr.map(migrate);
+        entries.sort((a, b) => a.date.localeCompare(b.date));
+        if (!Array.isArray(data)) {
+          watchlist = Array.isArray(data.watchlist) ? data.watchlist : [];
+          rf = (typeof data.rf === "number") ? data.rf : rf;
+          saveWatch(); saveRf();
+        }
+        save(); render();
+      }
+    } catch (e) {
+      alert("File non valido: serve un backup JSON esportato da questa app.");
+    }
+    ev.target.value = "";
+  };
+  reader.readAsText(f);
+});
+
+// ---------- tab ----------
+const TABKEY = "twr-tab-v1";
+function buildTabs() {
+  const perf = ["metrics", "chartCard", "sec-form", "sec-registry", "warnings", "footer"];
+  perf.forEach(id => { const el = $(id); if (el) $("tab-perf").appendChild(el); });
+  const rc = $("riskCard"); if (rc) $("tab-risk").appendChild(rc);
+  const sw = $("sec-watch"); if (sw) $("tab-watch").appendChild(sw);
+}
+function setTab(tab) {
+  ["perf", "risk", "watch"].forEach(t => {
+    $("tab-" + t).hidden = (t !== tab);
+    document.querySelector('.tab[data-tab="' + t + '"]').classList.toggle("on", t === tab);
+  });
+  try { localStorage.setItem(TABKEY, tab); } catch (e) {}
+  window.scrollTo({ top: 0, behavior: "auto" });
+}
+
+// ---------- avvio ----------
+load();
+loadAux();
+buildTabs();
+resetForm();
+resetWForm();
+render();
+let startTab = "perf";
+try { const t = localStorage.getItem(TABKEY); if (["perf", "risk", "watch"].includes(t)) startTab = t; } catch (e) {}
+setTab(startTab);
+</script>
+<script>if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(){});});}</script>
+</body>
+</html>
