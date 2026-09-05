@@ -676,7 +676,9 @@ function renderWatch() {
     <button class="${wView === "semplice" ? "on" : ""}" onclick="setWView('semplice')">Semplice</button>
     <button class="${wView === "completa" ? "on" : ""}" onclick="setWView('completa')">Completa</button></span>`;
   const nSym = watchlist.filter(x => x.sym && x.sym.trim()).length;
-  const updateBtn = nSym > 0 ? ` <button class="link g" id="wUpdateBtn" onclick="updatePrices()">Aggiorna prezzi (${nSym})</button>` : "";
+  const updateBtn = nSym > 0
+    ? ` <button class="link g" id="wUpdateBtn" onclick="updatePrices()"${wUpdatingPrices ? ' disabled style="opacity:.5;pointer-events:none"' : ''}>${wUpdatingPrices ? "Aggiornamento…" : "Aggiorna prezzi (" + nSym + ")"}</button>`
+    : "";
   $("wTools").innerHTML = (rows.length ? viewToggle : "") + updateBtn +
     (watchlist.length ? ` <button class="link m" onclick="askWReset()">Azzera</button>` : "");
   $("wPriceStatus").innerHTML = wPriceStatusMsg || "";
@@ -1019,46 +1021,86 @@ function askWReset() {
 }
 
 // ---- aggiornamento prezzi via funzione Netlify (Twelve Data) ----
+// Il piano gratuito di Twelve Data concede 8 crediti al minuto, e OGNI simbolo
+// richiesto vale 1 credito (anche dentro una singola chiamata con più simboli).
+// Quindi si spezza il lavoro in gruppi da 8 simboli, con una pausa tra un
+// gruppo e l'altro per restare sotto il limite.
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
 async function updatePrices() {
   if (wUpdatingPrices) return;
   const withSym = watchlist.filter(x => x.sym && x.sym.trim());
   if (withSym.length === 0) return;
+
+  const CHUNK = 8;
+  const WAIT_MS = 65000; // poco sopra il minuto, margine di sicurezza sul reset dei crediti
+
   wUpdatingPrices = true;
-  wPriceStatusMsg = "Aggiornamento prezzi in corso…";
-  const btn = $("wUpdateBtn"); if (btn) { btn.textContent = "Aggiorno…"; btn.style.pointerEvents = "none"; }
+  wPriceStatusMsg = "Avvio aggiornamento — tieni l'app aperta in primo piano finché non finisce…";
   renderWatch();
 
-  const us = [], eu = [];
-  withSym.forEach(x => {
-    const s = x.sym.trim();
-    if (s.includes(":")) eu.push(s); else us.push(s);
-  });
+  // tiene lo schermo acceso durante l'attesa (funziona solo con l'app in primo piano,
+  // non sopravvive alla chiusura dell'app o al passaggio ad altre app)
+  let wakeLock = null;
+  try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+
+  const queue = withSym.map(x => x.sym.trim());
+  const chunks = [];
+  for (let i = 0; i < queue.length; i += CHUNK) chunks.push(queue.slice(i, i + CHUNK));
+
+  let updated = 0;
+  const allErrors = [];
 
   try {
-    const params = new URLSearchParams();
-    if (us.length) params.set("us", us.join(","));
-    if (eu.length) params.set("eu", eu.join(","));
-    const res = await fetch("/.netlify/functions/prices?" + params.toString());
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || ("HTTP " + res.status));
+    for (let ci = 0; ci < chunks.length; ci++) {
+      const chunk = chunks[ci];
+      const us = [], eu = [];
+      chunk.forEach(s => { if (s.includes(":")) eu.push(s); else us.push(s); });
+
+      wPriceStatusMsg = `Gruppo ${ci + 1} di ${chunks.length}: aggiorno ${chunk.length} titoli…`;
+      renderWatch();
+
+      try {
+        const params = new URLSearchParams();
+        if (us.length) params.set("us", us.join(","));
+        if (eu.length) params.set("eu", eu.join(","));
+        const res = await fetch("/.netlify/functions/prices?" + params.toString());
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || ("HTTP " + res.status));
+        }
+        const data = await res.json();
+        watchlist = watchlist.map(x => {
+          if (!x.sym) return x;
+          const hit = data.prices && data.prices[x.sym.trim()];
+          if (hit && isFinite(hit.price) && hit.price > 0) { updated++; return { ...x, price: hit.price }; }
+          return x;
+        });
+        saveWatch();
+        if (data.errors && data.errors.length) allErrors.push(...data.errors);
+      } catch (e) {
+        allErrors.push(`Gruppo ${ci + 1}: ${e.message}`);
+      }
+
+      // pausa prima del gruppo successivo, per rispettare il limite di crediti/minuto
+      // (saltata dopo l'ultimo gruppo)
+      if (ci < chunks.length - 1) {
+        let remaining = Math.round(WAIT_MS / 1000);
+        while (remaining > 0) {
+          wPriceStatusMsg = `Gruppo ${ci + 1}/${chunks.length} fatto. Attendo ${remaining}s per il limite del piano gratuito (8 richieste/min)…`;
+          renderWatch();
+          const step = Math.min(5, remaining);
+          await sleep(step * 1000);
+          remaining -= step;
+        }
+      }
     }
-    const data = await res.json();
-    let updated = 0;
-    watchlist = watchlist.map(x => {
-      if (!x.sym) return x;
-      const hit = data.prices && data.prices[x.sym.trim()];
-      if (hit && isFinite(hit.price) && hit.price > 0) { updated++; return { ...x, price: hit.price }; }
-      return x;
-    });
-    saveWatch();
-    const errPart = (data.errors && data.errors.length) ? ` · ${data.errors.length} non aggiornati: ${data.errors.slice(0, 3).join("; ")}` : "";
     const now = new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+    const errPart = allErrors.length ? ` · ${allErrors.length} non aggiornati: ${allErrors.slice(0, 3).join("; ")}` : "";
     wPriceStatusMsg = `Aggiornati ${updated} di ${withSym.length} prezzi alle ${now}.${errPart}`;
-  } catch (e) {
-    wPriceStatusMsg = `Aggiornamento non riuscito: ${e.message}. Verifica che la funzione Netlify sia pubblicata e che TWELVE_DATA_API_KEY sia impostata.`;
   } finally {
     wUpdatingPrices = false;
+    if (wakeLock) { try { await wakeLock.release(); } catch (e) {} }
     renderWatch();
   }
 }
