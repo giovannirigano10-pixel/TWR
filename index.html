@@ -119,6 +119,9 @@
   .pill-b { background: #E4EFEA; color: #1F6F54; } .pill-m { background: #FBF3E4; color: #A8791B; } .pill-a { background: #F5E4DE; color: #A0432C; }
   .pill-port { background: #E5EAF5; color: #35538C; } .pill-cand { background: #ECEDEA; color: #5C6B66; }
   .pill-core { background: #EDE7F5; color: #5B3E8C; }
+  .rk-delta { display: inline-block; font-size: 10.5px; font-weight: 600; margin-left: 2px; padding: 0 3px; border-radius: 4px; vertical-align: middle; }
+  .rk-up { background: #E4EFEA; color: #1F6F54; }
+  .rk-down { background: #F5E4DE; color: #A0432C; }
   .wcard { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: #fff; margin-bottom: 7px; }
   .wcard.top { background: #F1F7F4; border-color: #C3DCCD; }
   .wcard .rk { font-size: 13px; color: var(--faint); min-width: 18px; }
@@ -297,6 +300,7 @@ try { const v = localStorage.getItem("twr-wview-v1"); if (v === "semplice" || v 
 let wFormOpen = false;
 let wTypeFilter = "tutti"; // "tutti" | "portafoglio" | "candidato"
 let wPriceStatusMsg = "";
+let wPrevRankFrozen = {}; // { id: rank } — classifica dell'ultima apertura, congelata per la sessione
 let wUpdatingPrices = false;
 try { const tf = localStorage.getItem("twr-wtypefilter-v1"); if (["tutti", "portafoglio", "candidato"].includes(tf)) wTypeFilter = tf; } catch (e) {}
 let regFilter = "n12";      // filtro di visualizzazione del registro (solo vista, non intacca i calcoli)
@@ -339,6 +343,9 @@ function save() {
 function loadAux() {
   try { const w = localStorage.getItem(WKEY); if (w) { const p = JSON.parse(w); if (Array.isArray(p)) watchlist = p; } } catch (e) {}
   try { const r = localStorage.getItem(RFKEY); if (r != null && r !== "") rf = parseFloat(r); } catch (e) {}
+  // classifica watchlist com'era l'ultima volta che hai aperto l'app: resta congelata
+  // per tutta questa sessione, così le frecce di movimento sono stabili finché non riapri.
+  try { const pr = localStorage.getItem("twr-prevrank-v1"); if (pr) wPrevRankFrozen = JSON.parse(pr) || {}; } catch (e) {}
 }
 function saveWatch() {
   try { localStorage.setItem(WKEY, JSON.stringify(watchlist)); } catch (e) {
@@ -694,6 +701,25 @@ function renderWatch() {
 
   // filtro per tipo (solo vista); il rank mostrato resta quello globale della classifica
   const globalRank = {}; ranked.forEach((x, i) => globalRank[x.id] = i + 1);
+
+  // variazione rispetto alla classifica dell'ultima apertura (congelata in wPrevRankFrozen):
+  // delta positivo = salito di N posizioni, negativo = sceso di N. Assente per i titoli nuovi.
+  const rankDelta = {};
+  ranked.forEach(x => {
+    const prev = wPrevRankFrozen[x.id];
+    rankDelta[x.id] = (prev == null) ? null : (prev - globalRank[x.id]);
+  });
+  const deltaBadge = id => {
+    const d = rankDelta[id];
+    if (!d) return "";
+    return d > 0
+      ? `<span class="rk-delta rk-up">▲${d}</span>`
+      : `<span class="rk-delta rk-down">▼${Math.abs(d)}</span>`;
+  };
+  // salvo la classifica di ADESSO come base per il prossimo confronto (la prossima volta
+  // che apri l'app). Non tocca wPrevRankFrozen, che resta fisso per tutta questa sessione.
+  try { localStorage.setItem("twr-prevrank-v1", JSON.stringify(globalRank)); } catch (e) {}
+
   const nPort = ranked.filter(x => (x.tipo || "candidato") === "portafoglio").length;
   const nCand = ranked.length - nPort;
   const shown = ranked.filter(x => wTypeFilter === "tutti" || (x.tipo || "candidato") === wTypeFilter);
@@ -710,7 +736,7 @@ function renderWatch() {
       const gr = globalRank[x.id];
       const badges = tipoPill(x.tipo || "candidato") + (x.core ? ' <span class="pill pill-core">core</span>' : '');
       cards += `<div class="wcard ${gr === 1 ? "top" : ""}">
-        <span class="rk num">${gr}</span>
+        <span class="rk num">${gr}${deltaBadge(x.id)}</span>
         <span class="nm"><div class="t">${esc(x.name)}</div><div class="s">${badges}</div></span>
         <span class="er num ${x.m.expRet >= 0 ? "pos" : "neg"}">${(x.m.expRet >= 0 ? "+" : "") + pct(x.m.expRet, 0)}</span>
         <span class="sc"><span class="scorebar"><i style="width:${(x.score / maxScore * 100).toFixed(0)}%"></i></span><br><b class="num">${x.score.toFixed(0)}</b></span>
@@ -725,7 +751,7 @@ function renderWatch() {
       const m = x.m;
       const rrTxt = m.rr == null ? "—" : (m.rr >= 99 ? "protetto" : m.rr.toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "×");
       body += `<tr class="${gr === 1 ? "rank-1" : ""}">
-        <td class="tr-l" style="font-weight:${gr === 1 ? 600 : 400}">${gr}. ${esc(x.name)}</td>
+        <td class="tr-l" style="font-weight:${gr === 1 ? 600 : 400}">${gr}. ${esc(x.name)} ${deltaBadge(x.id)}</td>
         <td class="tr-l">${tipoPill(x.tipo || "candidato")}${x.core ? ' <span class="pill pill-core">core</span>' : ''}</td>
         <td class="num tr-r">${x.price.toLocaleString("it-IT")}</td>
         <td class="num tr-r">${m.expFV.toLocaleString("it-IT", { maximumFractionDigits: 2 })}</td>
@@ -1015,7 +1041,8 @@ function deleteCand(id) {
 function askWReset() {
   if (confirm("Azzerare l'intera watchlist? Operazione irreversibile.")) {
     watchlist = []; resetWForm();
-    try { localStorage.removeItem(WKEY); } catch (e) {}
+    wPrevRankFrozen = {};
+    try { localStorage.removeItem(WKEY); localStorage.removeItem("twr-prevrank-v1"); } catch (e) {}
     renderWatch();
   }
 }
